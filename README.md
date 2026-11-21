@@ -33,6 +33,7 @@ The repo contains the **cleaned, shared split** in `data/`:
 | `classes.json` | Country names (list index = label) and class weights from the train split |
 | `class_counts.csv` | Images per country per split |
 | `cleaning_report.json` | What was removed and why, all parameters |
+| `image_stats.csv` | Per-image file size and colour statistics, used by the EDA notebook (created by `geosense.clean`) |
 
 ### Loading the data
 
@@ -100,7 +101,7 @@ geosense/
 ├── pyproject.toml
 ├── environment.yml
 ├── data/            manifest + class info (no images)
-├── notebooks/       EDA, baselines, models
+├── notebooks/       01_eda.ipynb, then baselines, models
 ├── src/geosense/    clean.py, split.py, data.py
 ├── results/         figures, tables, summary.md
 └── tests/           test_manifest.py

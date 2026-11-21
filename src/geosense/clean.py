@@ -289,6 +289,8 @@ def main():
     m[["path", "country", "label", "dup_group", "split"]].sort_values("path") \
         .to_csv(os.path.join(a.out, "manifest.csv"), index=False)
     df.drop(columns=["ok"]).to_csv(os.path.join(a.out, "inventory.csv"), index=False)
+    df[["path", "country", "bytes", "width", "height", "mean_r", "mean_g", "mean_b", "brightness",
+        "brightness_std"]].to_csv(os.path.join(a.out, "image_stats.csv"), index=False)   # used by the EDA
     per_class.assign(total=per_class.sum(axis=1), class_weight=weights).sort_values("total", ascending=False) \
         .to_csv(os.path.join(a.out, "class_counts.csv"))
     with open(os.path.join(a.out, "classes.json"), "w") as fh:

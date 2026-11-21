@@ -15,6 +15,7 @@ dependencies:
   - jupyter
   - ipykernel
   - pytest
+  - tabulate
   - pip
   - pip:
       - imagehash
