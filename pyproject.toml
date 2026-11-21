@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "geosense"
+version = "0.1.0"
+description = "GeoSense - predict the country an outdoor photo was taken in (IE University group project)"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy", "pandas", "pillow", "matplotlib", "seaborn", "scikit-learn",
+    "imagehash", "torch", "torchvision",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "jupyter", "ipykernel"]
+
+[tool.setuptools.packages.find]
+where = ["src"]

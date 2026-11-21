@@ -1,0 +1,129 @@
+{
+ "params": {
+  "root": "..",
+  "out": ".",
+  "reuse": false,
+  "workers": 4,
+  "min_side": 100,
+  "blank_std": 8.0,
+  "dup_threshold": 0,
+  "min_images": 100,
+  "seed": 42,
+  "max_seconds": null
+ },
+ "n_files": 49997,
+ "n_folders": 124,
+ "image_sizes": [
+  {
+   "width": 1536,
+   "height": 662,
+   "n": 49942
+  },
+  {
+   "width": 1030,
+   "height": 703,
+   "n": 55
+  }
+ ],
+ "dropped": {
+  "corrupt": 0,
+  "too_small": 0,
+  "near_blank": 0,
+  "exact_dup_label_conflict": 0,
+  "exact_duplicate": 1,
+  "rare_class": 2006
+ },
+ "near_dup_cross_country_pairs_ignored": 0,
+ "near_dup": {
+  "pairs_within_threshold": 194,
+  "pair_distance_histogram": {
+   "0": 194,
+   "1": 0,
+   "2": 20,
+   "3": 0,
+   "4": 74,
+   "5": 0,
+   "6": 763,
+   "7": 0,
+   "8": 7612,
+   "9": 0,
+   "10": 55889,
+   "11": 0,
+   "12": 323116,
+   "13": 0,
+   "14": 1497789,
+   "15": 0,
+   "16": 5689620
+  },
+  "images_in_a_group_of_2+": 385,
+  "n_groups_2+": 192,
+  "largest_groups": [
+   3,
+   2,
+   2,
+   2,
+   2
+  ],
+  "mixed_label_groups": 0,
+  "images_in_mixed_label_groups": 0
+ },
+ "threshold_table": [
+  {
+   "min_images": 1,
+   "n_classes": 124,
+   "pct_images_kept": 100.0
+  },
+  {
+   "min_images": 20,
+   "n_classes": 87,
+   "pct_images_kept": 99.5
+  },
+  {
+   "min_images": 50,
+   "n_classes": 76,
+   "pct_images_kept": 98.8
+  },
+  {
+   "min_images": 100,
+   "n_classes": 56,
+   "pct_images_kept": 96.0
+  },
+  {
+   "min_images": 150,
+   "n_classes": 44,
+   "pct_images_kept": 93.1
+  },
+  {
+   "min_images": 200,
+   "n_classes": 40,
+   "pct_images_kept": 91.7
+  },
+  {
+   "min_images": 300,
+   "n_classes": 28,
+   "pct_images_kept": 85.7
+  },
+  {
+   "min_images": 500,
+   "n_classes": 23,
+   "pct_images_kept": 82.1
+  }
+ ],
+ "final": {
+  "n_images": 47990,
+  "n_classes": 56,
+  "split_sizes": {
+   "train": 33589,
+   "test": 7208,
+   "val": 7193
+  },
+  "smallest_test_class": [
+   "Bangladesh",
+   15
+  ],
+  "largest_class": [
+   "United States",
+   12014
+  ]
+ }
+}

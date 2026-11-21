@@ -1,0 +1,20 @@
+name: geosense
+channels:
+  - pytorch
+  - conda-forge
+dependencies:
+  - python=3.11
+  - numpy
+  - pandas
+  - pillow
+  - matplotlib
+  - seaborn
+  - scikit-learn
+  - pytorch
+  - torchvision
+  - jupyter
+  - ipykernel
+  - pytest
+  - pip
+  - pip:
+      - imagehash

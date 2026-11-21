@@ -1,0 +1,26 @@
+# images are never committed - see data/README.md
+*.jpg
+*.jpeg
+*.png
+!results/*.png
+compressed_dataset/
+geosense_split/
+
+# large / regenerable outputs of geosense.clean
+data/inventory_raw.csv*
+data/inventory.csv
+data/near_dup_pairs.csv
+
+# models
+*.pt
+*.pth
+*.ckpt
+
+# python / tools
+__pycache__/
+*.egg-info/
+.venv/
+.ipynb_checkpoints/
+.pytest_cache/
+.DS_Store
+.env
