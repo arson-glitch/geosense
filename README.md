@@ -133,12 +133,13 @@ python -m geosense.train --root ~/Downloads/compressed_dataset --model cnn_scrat
 python -m geosense.train --root /path/compressed_dataset --model cnn_scratch
 python -m geosense.train --root /path/compressed_dataset --model resnet50 --stage1-epochs 3 --unfreeze-blocks 1
 # disconnected? same command + --resume
+# on Colab add --cache /content/cache: images pre-resized once, epochs ~4x faster
 ```
 
 | Step | Choice |
 |---|---|
 | Pre-processing (`transforms.py`) | Same UI crop as `geosense.preprocess` (keep 5–82% of width) → resize short side + crop (`--resize crop`, team rule; `squash` / `wide` only to compare on val) → ImageNet normalisation. Images decoded at half resolution (768×331) for speed |
-| Augmentation (train only) | Random crop after resizing to 115%, colour jitter. **No horizontal flip** (driving side) |
+| Augmentation (train only) | Random crop after resizing to 115%, brightness/contrast/saturation jitter (no hue: soil and vegetation colour are cues). **No horizontal flip** (driving side) |
 | Imbalance | Cross-entropy with square-root class weights (`--imbalance sqrt_weights`); `weights`, `sampler`, `none` also available |
 | Optimiser | Adam, LR halved when val macro-F1 plateaus, early stopping on val macro-F1 (patience 4) |
 | Transfer learning | Stage 1: frozen backbone, new head, lr 1e-3. Stage 2: last block unfrozen, lr 1e-4 |
