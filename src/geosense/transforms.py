@@ -8,7 +8,7 @@ Pipeline for one image (1536x662 GeoGuessr screenshot):
                      "squash" -> stretch to size x size   (keeps the whole scene, distorts shapes)
                      "wide"   -> size x 2*size            (keeps scene and shape; CNNs accept it)
                    Only switch away from "crop" after comparing on the validation set.
-  3. Train only  : random crop (small zoom) + colour jitter. NO horizontal flip:
+  3. Train only  : random crop (small zoom) + colour jitter (no hue). NO horizontal flip:
                    flipping swaps the driving side, which is one of the strongest cues.
   4. ToTensor + Normalize with ImageNet statistics (needed for pre-trained models,
                    harmless for the CNN from scratch, and keeps all our models identical).
@@ -53,7 +53,8 @@ def open_image(path):
     """
     from PIL import Image
     img = Image.open(path)
-    img.draft("RGB", (img.width // 2, img.height // 2))
+    if img.height >= 600:                        # original screenshots only, never cached small files
+        img.draft("RGB", (img.width // 2, img.height // 2))
     return img.convert("RGB")
 
 
@@ -65,15 +66,16 @@ def output_size(size: int = 224, resize: str = DEFAULT_RESIZE) -> tuple[int, int
 
 
 def build_transforms(train: bool, size: int = 224, resize: str = DEFAULT_RESIZE,
-                     zoom: float = 1.15, jitter: float = 0.2):
+                     zoom: float = 1.15, jitter: float = 0.2, crop_ui: bool = True):
     """Return the torchvision pipeline.
 
     train : True -> with augmentation (train split only); False -> deterministic (val / test / app).
     zoom  : for training we resize to `zoom * size` and take a random crop of `size`,
             i.e. a small random shift/zoom. For evaluation we resize straight to `size`.
+    crop_ui : False when the images come from geosense.cache (interface already removed).
     """
     h, w = output_size(size, resize)
-    steps = [CropUI()]
+    steps = [CropUI()] if crop_ui else []
 
     if train:
         big = (round(h * zoom), round(w * zoom))
@@ -81,8 +83,9 @@ def build_transforms(train: bool, size: int = 224, resize: str = DEFAULT_RESIZE,
             steps += [T.Resize(big[0]), T.RandomCrop((h, w))]   # random horizontal position too
         else:                                                   # squash / wide
             steps += [T.Resize(big), T.RandomCrop((h, w))]
-        steps += [T.ColorJitter(brightness=jitter, contrast=jitter, saturation=jitter, hue=0.02)]
-        # deliberately NO T.RandomHorizontalFlip()
+        # brightness / contrast / saturation only: NO hue shift, because the colour of soil and
+        # vegetation is itself a country cue. Deliberately NO T.RandomHorizontalFlip() either.
+        steps += [T.ColorJitter(brightness=jitter, contrast=jitter, saturation=jitter)]
     else:
         if resize == "crop":
             steps += [T.Resize(h), T.CenterCrop((h, w))]
