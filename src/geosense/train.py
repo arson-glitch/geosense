@@ -11,6 +11,7 @@ Examples
   python -m geosense.train --root /path/compressed_dataset --model resnet50 --stage1-epochs 3 --unfreeze-blocks 1
 
   # Colab session cut off? Same command + --resume continues from the last epoch.
+  # Add --cache /content/cache to pre-resize the images once (~5x faster epochs).
 
   # At the very END of the project only: export test logits from the best checkpoint
   python -m geosense.train --root /path/compressed_dataset --model resnet50 --export-only --export val,test
@@ -102,8 +103,7 @@ def small_subset(ds, n: int, seed: int) -> Subset:
     """n images, stratified by country, for quick debugging runs."""
     df = ds.df
     frac = min(1.0, n / len(df))
-    idx = df.groupby("label", group_keys=False).apply(
-        lambda g: g.sample(max(1, round(len(g) * frac)), random_state=seed)).index
+    idx = df.groupby("label").sample(frac=frac, random_state=seed).index
     return Subset(ds, sorted(idx.tolist()))
 
 
@@ -163,7 +163,8 @@ def metrics(logits: np.ndarray, y: np.ndarray, criterion=None) -> dict:
 
 # ------------------------------------------------------------------ export (the shared contract)
 def export_logits(model, root, split, args, device, classes) -> Path:
-    ds = FastGeoSenseDataset(root, split, transform=build_transforms(False, args.size, args.resize))
+    ds = FastGeoSenseDataset(root, split, transform=build_transforms(False, args.size, args.resize,
+                                                                    crop_ui=not args.cache))
     loader = DataLoader(ds, batch_size=args.batch_size, shuffle=False,
                         num_workers=args.workers, pin_memory=device.type == "cuda")
     logits, y = predict_logits(model, loader, device)
@@ -198,6 +199,7 @@ def parse_args(argv=None):
     ap.add_argument("--no-pretrained", action="store_true")
     ap.add_argument("--subset", type=int, default=0, help="use only N train images (debug); disables export")
     ap.add_argument("--workers", type=int, default=2)
+    ap.add_argument("--cache", default="", help="folder for pre-resized images (built once, then reused)")
     ap.add_argument("--device", default="auto")
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--resume", action="store_true", help="continue from checkpoints/<model>/last.pt")
@@ -225,11 +227,16 @@ def main(argv=None):
     print(f"model={args.model}  device={device}  classes={C}  resize={args.resize}  size={args.size}")
 
     model = build_model(args.model, C, pretrained=not args.no_pretrained).to(device)
+    if args.cache:                                   # read small pre-cropped, pre-resized copies
+        from .cache import build_cache, cache_height
+        args.root = str(build_cache(args.root, Path(args.cache) / f"h{cache_height(args.size)}",
+                                    cache_height(args.size), workers=args.workers + 1))
 
     if not args.export_only:
         # ---- data
-        train_ds = FastGeoSenseDataset(args.root, "train", transform=build_transforms(True, args.size, args.resize))
-        val_ds = FastGeoSenseDataset(args.root, "val", transform=build_transforms(False, args.size, args.resize))
+        tf = dict(size=args.size, resize=args.resize, crop_ui=not args.cache)
+        train_ds = FastGeoSenseDataset(args.root, "train", transform=build_transforms(True, **tf))
+        val_ds = FastGeoSenseDataset(args.root, "val", transform=build_transforms(False, **tf))
         if args.subset:
             train_ds = small_subset(train_ds, args.subset, args.seed)
             val_ds = small_subset(val_ds, max(200, args.subset // 4), args.seed)
