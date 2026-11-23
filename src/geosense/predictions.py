@@ -1,7 +1,7 @@
 """Export / check model predictions in the shared team format.
 
     predictions/<model_name>_<split>_logits.npy   float32, shape (N, C)
-      N = rows of data/manifest.csv with that split, IN THE SAME ORDER AS THE FILE
+      N = rows of data/splits.csv with that split, IN THE SAME ORDER AS THE FILE
       C = number of classes, IN THE ORDER OF data/classes.json
 Save LOGITS (before softmax). For models that only give probabilities save log(p + 1e-9).
 """

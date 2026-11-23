@@ -1,6 +1,6 @@
 """Load the cleaned GeoSense dataset (team contract: data/splits.csv, classes.json, continents.json).
 
-    from geosense import load_splits, load_classes, crop_ui, GeoSenseDataset
+    from geosense import load_splits, load_manifest, load_classes, crop_ui, GeoSenseDataset
     train_ds = GeoSenseDataset("~/Downloads/compressed_dataset", split="train", transform=...)
 
 Order matters: prediction files (.npy) follow the row order of splits.csv for that split,
@@ -45,10 +45,28 @@ def load_splits(path: str | Path = DATA_DIR / "splits.csv", split: str | None = 
     return df
 
 
-def load_classes(path: str | Path = DATA_DIR / "classes.json") -> list[str]:
-    """Kept countries, sorted alphabetically. Index in this list = class id."""
+def load_classes(path: str | Path = DATA_DIR / "classes.json",
+                 counts_path: str | Path | None = None) -> tuple[list[str], list[float]]:
+    """(classes, class_weights).
+
+    classes: kept countries from classes.json, sorted alphabetically - index = class id.
+    class_weights: inverse-frequency weights from the train split (class_counts.csv), same order.
+    Usage: ``classes, weights = load_classes()``.
+    """
+    path = Path(path)
     with open(path) as fh:
-        return json.load(fh)
+        classes = json.load(fh)
+    counts_path = path.with_name("class_counts.csv") if counts_path is None else Path(counts_path)
+    weights = pd.read_csv(counts_path, index_col=0)["class_weight"].reindex(classes).tolist()
+    return classes, weights
+
+
+def load_manifest(path: str | Path = DATA_DIR / "splits.csv", split: str | None = None) -> pd.DataFrame:
+    """splits.csv plus a ``label`` column (class id = index in classes.json). Same rows, same order."""
+    df = load_splits(path, split)
+    classes, _ = load_classes(Path(path).with_name("classes.json"))
+    df["label"] = df["country"].map({c: i for i, c in enumerate(classes)})
+    return df
 
 
 def load_continents(path: str | Path = DATA_DIR / "continents.json") -> dict[str, str]:
@@ -74,7 +92,7 @@ try:
                 raise FileNotFoundError(f"Dataset folder not found: {self.root}")
             data_dir = Path(data_dir)
             self.df = load_splits(data_dir / "splits.csv", split)
-            self.classes = load_classes(data_dir / "classes.json")
+            self.classes, _ = load_classes(data_dir / "classes.json")
             self.class_to_id = {c: i for i, c in enumerate(self.classes)}
             self.labels = self.df["country"].map(self.class_to_id).to_numpy()
             self.transform = transform

@@ -1,10 +1,10 @@
 """Checks that the shared data files follow the team contract. Run with: pytest -q"""
 from PIL import Image
 
-from geosense import crop_ui, load_classes, load_continents, load_splits
+from geosense import crop_ui, load_classes, load_continents, load_manifest, load_splits
 
 df = load_splits()
-classes = load_classes()
+classes, weights = load_classes()
 continents = load_continents()
 
 
@@ -45,3 +45,13 @@ def test_min_images_per_class():
 def test_crop_ui_standard_image_is_5_to_82_percent():
     out = crop_ui(Image.new("RGB", (1536, 662)))
     assert out.size == (round(0.82 * 1536) - round(0.05 * 1536), 662)
+
+
+def test_class_weights_line_up_with_classes():
+    assert len(weights) == len(classes) and all(w > 0 for w in weights)
+
+
+def test_load_manifest_adds_label_in_classes_order():
+    m = load_manifest()
+    assert (m.path == df.path).all()                      # same rows, same order as splits.csv
+    assert (m.country == m.label.map(dict(enumerate(classes)))).all()
