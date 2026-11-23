@@ -120,6 +120,35 @@ Models 1, 2, 5 and 6 of the results table. Code in `src/geosense/` (`preprocess.
 Shared pre-processing (`geosense.preprocess`): keep x from 5% to 82% of the width (removes score box, minimap, compass), resize the short side then centre-crop (no squash unless compared on `val`), 336 px for StreetCLIP, no horizontal flip.
 Check your own exports with `from geosense.predictions import check_val; check_val()` (validation metrics only).
 
+## Training our own models: CNN from scratch + ResNet-50 (Mohamed)
+
+CNN from scratch and ResNet-50 / EfficientNet-B0 share one training loop. On a GPU use
+`notebooks/04_train_own_models_colab.ipynb` (checkpoints saved to Google Drive).
+
+```bash
+# quick check, runs on a laptop CPU in a few minutes (no export)
+python -m geosense.train --root ~/Downloads/compressed_dataset --model cnn_scratch --subset 1000 --epochs 2
+
+# full runs (GPU)
+python -m geosense.train --root /path/compressed_dataset --model cnn_scratch
+python -m geosense.train --root /path/compressed_dataset --model resnet50 --stage1-epochs 3 --unfreeze-blocks 1
+# disconnected? same command + --resume
+```
+
+| Step | Choice |
+|---|---|
+| Pre-processing (`transforms.py`) | Same UI crop as `geosense.preprocess` (keep 5–82% of width) → resize short side + crop (`--resize crop`, team rule; `squash` / `wide` only to compare on val) → ImageNet normalisation. Images decoded at half resolution (768×331) for speed |
+| Augmentation (train only) | Random crop after resizing to 115%, colour jitter. **No horizontal flip** (driving side) |
+| Imbalance | Cross-entropy with square-root class weights (`--imbalance sqrt_weights`); `weights`, `sampler`, `none` also available |
+| Optimiser | Adam, LR halved when val macro-F1 plateaus, early stopping on val macro-F1 (patience 4) |
+| Transfer learning | Stage 1: frozen backbone, new head, lr 1e-3. Stage 2: last block unfrozen, lr 1e-4 |
+| Outputs | `checkpoints/<model>/best.pt` (git-ignored), `results/<model>_history.csv`, `predictions/<model>_<split>_logits.npy` |
+
+Exported logits follow the shared contract: `float32`, shape `(N, C)`, rows in `manifest.csv` order for that
+split, columns in `classes.json` order, raw logits (before softmax). Only `val` is exported by default;
+test logits are exported once at the end with `--export-only --export val,test`. Exports go through `geosense.predictions.save_logits`, so `check_val()` works on them.
+For Grad-CAM, hook `model.gradcam_layer()` (CNN) or `geosense.models.gradcam_layer(model)` (ResNet / EfficientNet).
+
 ## Data licence
 
 Images derive from Google Street View via GeoGuessr. Used strictly for non-commercial academic purposes.
