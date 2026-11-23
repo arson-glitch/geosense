@@ -19,3 +19,5 @@ dependencies:
   - pip
   - pip:
       - imagehash
+      - transformers>=4.40
+      - tqdm
