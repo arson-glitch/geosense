@@ -24,3 +24,8 @@ __pycache__/
 .pytest_cache/
 .DS_Store
 .env
+
+# Thea: cached features + big embeddings (share via Drive); dry-run outputs
+features/
+predictions/*embeddings*.npy
+predictions_dryrun/

@@ -128,6 +128,20 @@ geosense/
 
 Never commit images or model weights.
 
+## Baselines and StreetCLIP without training (Thea)
+
+Models 1, 2, 5 and 6 of the results table. Code in `src/geosense/` (`preprocess.py`, `baselines.py`, `streetclip.py`, `predictions.py`), notebooks `02_baselines_thea.ipynb` (CPU) and `03_streetclip_thea.ipynb` (GPU).
+
+| Output | Content |
+|---|---|
+| `predictions/<model>_<split>_logits.npy` | `float32`, shape `(N, 56)`. Rows = `splits.csv` rows of that split **in file order**, columns = `classes.json` order. Logits, not probabilities (`log(p + 1e-9)` for RF / LR). Models: `majority`, `histogram_lr`, `histogram_rf`, `streetclip_zeroshot`, `streetclip_probe`; splits `val` and `test` |
+| `predictions/streetclip_embeddings_<split>.npy` | 768-d unit-norm StreetCLIP image embeddings, **float16** (`.astype("float32")` after loading), same row order. Too big for git: shared by link |
+
+Shared pre-processing (`geosense.preprocess`): keep x from 5% to 82% of the width (removes score box, minimap, compass), resize the short side then centre-crop (no squash unless compared on `val`), 336 px for StreetCLIP, no horizontal flip.
+Check your own exports with `from geosense.predictions import check_val; check_val()` (validation metrics only).
+
+## Data licence
+
 ## Licence
 
 Street View images (via GeoGuessr): academic non-commercial use only. StreetCLIP: CC-BY-NC.
