@@ -1,11 +1,19 @@
 # GeoSense – Where was this photo taken?
 
-Predict the **country** an outdoor photo was taken in, from GeoGuessr / Street View screenshots.
+Predict the **country** (and continent) an outdoor street-level photo was taken in, from GeoGuessr / Street View
+screenshots. We compare baselines, our own CNNs and StreetCLIP, then calibrate and combine them.
 Group project · AI – Machine Learning & Analytics · Prof. Paula Delgado-Santos · IE University
 
-**Team:** Louis Levet-Lecarpentier (coordination, business case, prototype) · Seif Omara (data cleaning, EDA) ·
-Thea Taleb (baselines) · Mohamed Embaby (CNN from scratch) · Maya Tamimi (transfer learning) ·
-Faris Alami (evaluation, Grad-CAM, responsible AI)
+**Team**
+
+| Member | Responsibility |
+|---|---|
+| Seif Omara | Data, cleaning, de-duplication, EDA |
+| Thea Taleb | Baselines + StreetCLIP zero-shot and linear probe |
+| Mohamed Embaby | Shared training code, CNN from scratch, ResNet-50 / EfficientNet |
+| Faris Alami + Louis Levet-Lecarpentier | StreetCLIP fine-tuning |
+| Maya Tamimi | Evaluation, calibration, model mix, explainability, responsible AI |
+| Louis Levet-Lecarpentier | Coordination, business case, Streamlit app, report |
 
 ## Setup
 
@@ -13,100 +21,113 @@ Faris Alami (evaluation, Grad-CAM, responsible AI)
 conda env create -f environment.yml
 conda activate geosense
 python -m pip install -e .
-pytest -q            # checks the shared split is consistent
+pytest -q            # checks the shared data files follow the team contract
 ```
+
+Intel Mac with PyTorch 2.2: run `pip install "numpy<2"` (PyTorch 2.2 does not work with NumPy 2).
 
 ## Data
 
-The images are **not** in this repo (6.8 GB, and Street View imagery may not be redistributed).
-Each team member downloads them once:
+The images are **not** in this repo (6.7 GB; Street View images, academic non-commercial use only).
+Download them once:
 
-1. Download [GeoLocation – Geoguessr Images (50K)](https://www.kaggle.com/datasets/ubitquitin/geolocation-geoguessr-images-50k) from Kaggle and unzip it.
-   You get a folder `compressed_dataset/` with one sub-folder per country.
-2. Keep it **outside** this repo, e.g. `~/Downloads/compressed_dataset`.
+```python
+import kagglehub
+path = kagglehub.dataset_download("ubitquitin/geolocation-geoguessr-images-50k")
+# images: <path>/compressed_dataset/<Country>/<file>.jpg
+```
 
-The repo contains the **cleaned, shared split** in `data/`:
+or download [the dataset from Kaggle](https://www.kaggle.com/datasets/ubitquitin/geolocation-geoguessr-images-50k)
+by hand. Keep the dataset folder **outside** this repo, and don't put other folders inside `compressed_dataset/`.
 
-| File | What it is |
+### Shared files (team contract, do not change without telling the team)
+
+| File | Content |
 |---|---|
-| `manifest.csv` | Every usable image: `path, country, label, dup_group, split`. **Everyone trains/tests on this.** |
-| `classes.json` | Country names (list index = label) and class weights from the train split |
-| `class_counts.csv` | Images per country per split |
-| `cleaning_report.json` | What was removed and why, all parameters |
-| `image_stats.csv` | Per-image file size and colour statistics, used by the EDA notebook (created by `geosense.clean`) |
+| `data/splits.csv` | `path, country, continent, split`. `path` is relative to `compressed_dataset/`; `split` is `train` / `val` / `test` |
+| `data/classes.json` | Kept countries, sorted alphabetically. **Index in this list = class id everywhere** |
+| `data/continents.json` | `{country: continent}` for every kept country |
+
+Prediction files (`predictions/<model>_<split>_logits.npy`) must follow the **row order of `splits.csv`** for that
+split and the **column order of `classes.json`**.
+
+Extra files: `class_counts.csv` (images per country, split and continent, plus inverse-frequency class weights),
+`cleaning_report.json` (what was removed and why), `image_stats.csv` (per-image size and colour, used by the EDA).
 
 ### Loading the data
-
-**Option A – straight from the manifest (recommended, no extra files):**
 
 ```python
 from geosense import GeoSenseDataset
 from torchvision import transforms
 
-tf = transforms.Compose([transforms.Resize((224, 224)), transforms.ToTensor()])
+tf = transforms.Compose([transforms.Resize(224), transforms.RandomCrop(224),
+                         transforms.ColorJitter(0.2, 0.2, 0.2), transforms.ToTensor()])   # no horizontal flip!
 train_ds = GeoSenseDataset("~/Downloads/compressed_dataset", split="train", transform=tf)
-val_ds   = GeoSenseDataset("~/Downloads/compressed_dataset", split="val",   transform=tf)
 ```
 
-**Option B – train/val/test folders for `torchvision.datasets.ImageFolder`:**
-
-```bash
-python -m geosense.split --root ~/Downloads/compressed_dataset --out ~/Downloads/geosense_split
-```
-
-Uses hard links (no extra disk space). Gives `geosense_split/{train,val,test}/<country>/*.jpg`.
-
-> ⚠️ Do not create your own split. Use `split` from the manifest so all results are comparable.
-> The **test** split is used only once, at the very end.
+`GeoSenseDataset` returns images in `splits.csv` order with the **UI already cropped** (`geosense.crop_ui`) and
+labels as class ids from `classes.json`. Use it rather than your own loader so everyone pre-processes the same way.
 
 ## Data cleaning (`src/geosense/clean.py`)
 
-Non-destructive: images are never modified, the output is the manifest.
+Non-destructive: images are never modified; the outputs are the files above.
 
 | Step | Result |
 |---|---|
-| Raw data | 49,997 images, 124 countries, all 1536×662 px JPEG |
-| Corrupt / tiny / blank files | 0 found |
-| Exact duplicates (identical bytes) | 1 removed |
-| Near-duplicates (same screenshot, different round/score overlay; pHash distance 0) | 385 images in 194 groups – kept, but each group is always in **one** split, so none leaks into test |
-| Countries with < 100 images | 68 countries, 2,006 images removed |
-| **Final** | **47,990 images, 56 countries** |
-| Split (stratified by country, grouped by duplicate group, seed 42) | train 33,589 (70%) · val 7,193 (15%) · test 7,208 (15%) |
+| Raw data | 49,997 images, 124 countries; 49,942 are 1536×662, 55 are 1030×703 |
+| Corrupt / tiny / blank files | 0 |
+| Duplicates (perceptual hash, distance 0, same country) | 194 removed (1 byte-identical + 193 same screenshot in another game round) |
+| Countries with < 100 images | 68 countries, 1,996 images removed |
+| **Final** | **47,807 images, 56 countries** |
+| Split (stratified by country, seed 42) | train 33,464 · val 7,171 · test 7,172 |
+
+| Continent | Images | Countries |
+|---|---|---|
+| Europe | 17,538 | 27 |
+| North America | 14,253 | 3 |
+| Asia | 8,136 | 13 |
+| South America | 3,946 | 6 |
+| Oceania | 2,254 | 2 |
+| Africa | 1,680 | 5 |
 
 Decisions and evidence:
 
-- **Duplicate threshold = 0.** At pHash distance 0, 100% of matched pairs were the same country and visually the
-  same location. At distance 2 only 80% were, at 4 only 30%: the matches were different places with similar layouts
-  (e.g. flat horizons in Canada and the USA). A looser threshold chained 273 unrelated images into one group.
-  Cross-country matches are never treated as duplicates.
-- **Cut-off = 100 images per country** (proposal's plan). Alternatives: ≥150 → 44 countries / 93% of images;
-  ≥200 → 40 / 92%. The smallest test classes have ~15 images, so per-country test scores for small countries are noisy.
-- **Imbalance:** United States = 12,014 images (25%). The weights in `classes.json` are plain inverse frequency
-  (Ghana ≈ 110× USA); consider square-root weights or a weighted sampler if training is unstable.
+- **Duplicate threshold = 0.** Pairs at distance 0 were 100% the same country and visually the same location.
+  At distance 2 only 80% were, at 4 only 30%: different places with similar layouts (e.g. flat horizons).
+  Limitation: the same place photographed in another direction is not detected.
+- **UI crop in pixels.** The interface has a fixed size in pixels, so `crop_ui` removes 77 px left and 276 px right.
+  That is exactly the agreed 5% → 82% on standard images, and it also removes the score box and mini-map on the
+  1030×703 images (where 5% → 82% would not). A ~6 px sliver of the score box edge remains top-right (same in every image).
+- **Continents:** Russia → Europe, Turkey → Asia, Armenia → Asia, Mexico → North America (to confirm).
+- **Imbalance:** United States = 11,973 images (25%). The weights in `class_counts.csv` are plain inverse frequency
+  (~110× between the smallest country and the USA); square-root weights or a weighted sampler may train more stably.
 
-Known limitation: hashing only catches copies of the *same* screenshot. Photos of the same place facing another
-direction look different and may still sit in different splits.
-
-Re-run (≈3–5 min, then seconds for parameter changes):
+Re-run (≈3–5 min):
 
 ```bash
-python -m geosense.clean --root ~/Downloads/compressed_dataset --out data/ --min-images 100 --dup-threshold 0
+python -m geosense.clean --root ~/Downloads/compressed_dataset --out data/
 ```
+
+## EDA
+
+`notebooks/01_eda.ipynb`; figures and a one-page summary in `results/` (`eda_summary.md`).
 
 ## Project structure
 
 ```
 geosense/
 ├── README.md
-├── pyproject.toml
-├── environment.yml
-├── data/            manifest + class info (no images)
-├── notebooks/       01_eda.ipynb, then baselines, models
-├── src/geosense/    clean.py, split.py, data.py
-├── results/         figures, tables, summary.md
-└── tests/           test_manifest.py
+├── pyproject.toml / environment.yml
+├── data/            splits.csv, classes.json, continents.json (no images)
+├── notebooks/       01_eda.ipynb
+├── predictions/     *.npy exports (per model)
+├── results/         figures, tables
+├── src/geosense/    clean.py, data.py, split.py, ...
+└── tests/           test_data_contract.py
 ```
 
-## Data licence
+Never commit images or model weights.
 
-Images derive from Google Street View via GeoGuessr. Used strictly for non-commercial academic purposes.
+## Licence
+
+Street View images (via GeoGuessr): academic non-commercial use only. StreetCLIP: CC-BY-NC.

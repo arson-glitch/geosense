@@ -1,57 +1,57 @@
-country,train,val,test,total,class_weight
-United States,8407,1802,1805,12014,0.0223
-Japan,2693,576,571,3840,0.0697
-France,2499,538,536,3573,0.0751
-United Kingdom,1742,372,370,2484,0.1077
-Brazil,1624,348,348,2320,0.1156
-Russia,1229,267,265,1761,0.1527
-Australia,1190,257,257,1704,0.1577
-Canada,969,207,206,1382,0.1937
-South Africa,830,178,175,1183,0.2261
-Spain,753,160,162,1075,0.2492
-Finland,736,156,157,1049,0.255
-Thailand,660,141,143,944,0.2844
-Mexico,626,137,138,901,0.2998
-Poland,605,127,131,863,0.3102
-Italy,551,118,120,789,0.3406
-Sweden,507,111,108,726,0.3702
-Singapore,497,106,104,707,0.3776
-Germany,487,104,107,698,0.3854
-Argentina,480,103,106,689,0.391
-Norway,471,101,103,675,0.3985
-Netherlands,409,86,84,579,0.4589
-New Zealand,390,83,84,557,0.4812
-Taiwan,382,81,84,547,0.4913
-Malaysia,295,64,64,423,0.6362
-Austria,242,52,53,347,0.7755
-Romania,243,51,52,346,0.7723
-Chile,227,48,51,326,0.8268
-Israel,227,50,49,326,0.8268
-Ireland,204,43,43,290,0.92
-Indonesia,204,42,42,288,0.92
-Peru,190,40,40,270,0.9878
-Turkey,190,39,39,268,0.9878
-Czechia,181,38,38,257,1.0369
-Colombia,176,38,37,251,1.0663
-Greece,173,37,38,248,1.0848
-South Korea,171,36,36,243,1.0975
-Portugal,169,36,37,242,1.1105
-Philippines,152,32,35,219,1.2347
-Belgium,152,33,34,219,1.2347
-Bulgaria,153,32,32,217,1.2266
-Denmark,138,30,30,198,1.36
-Switzerland,120,27,26,173,1.564
-Hungary,117,26,25,168,1.6041
-India,110,24,26,160,1.7062
-Botswana,100,23,21,144,1.8768
-Lithuania,99,20,21,140,1.8957
-Kenya,92,20,18,130,2.04
-Croatia,90,19,20,129,2.0853
-Nigeria,86,18,19,123,2.1823
-Cambodia,84,17,17,118,2.2343
-Latvia,81,18,18,117,2.317
-Bolivia,83,16,17,116,2.2612
-Ukraine,78,18,18,114,2.4061
-Slovakia,75,15,18,108,2.5024
-Bangladesh,74,17,15,106,2.5362
-Ghana,76,15,15,106,2.4694
+country,train,val,test,continent,total,class_weight
+United States,8381,1796,1796,North America,11973,0.0223
+Japan,2667,571,572,Asia,3810,0.0702
+France,2497,535,536,Europe,3568,0.075
+United Kingdom,1733,371,372,Europe,2476,0.1081
+Brazil,1611,345,345,South America,2301,0.1162
+Russia,1228,263,264,Europe,1755,0.1525
+Australia,1188,255,255,Oceania,1698,0.1576
+Canada,967,207,207,North America,1381,0.1937
+South Africa,824,177,177,Africa,1178,0.2273
+Spain,750,160,161,Europe,1071,0.2497
+Finland,732,157,157,Europe,1046,0.2558
+Thailand,659,141,141,Asia,941,0.2842
+Mexico,629,135,135,North America,899,0.2977
+Poland,600,128,129,Europe,857,0.3121
+Italy,551,118,118,Europe,787,0.3399
+Sweden,507,108,109,Europe,724,0.3694
+Singapore,491,105,105,Asia,701,0.3814
+Germany,486,104,104,Europe,694,0.3853
+Argentina,479,103,103,South America,685,0.391
+Norway,470,100,101,Europe,671,0.3984
+Netherlands,405,86,87,Europe,578,0.4624
+New Zealand,389,83,84,Oceania,556,0.4814
+Taiwan,381,81,82,Asia,544,0.4915
+Malaysia,295,63,64,Asia,422,0.6348
+Austria,243,52,52,Europe,347,0.7707
+Romania,241,52,52,Europe,345,0.777
+Chile,227,49,49,South America,325,0.825
+Israel,226,48,49,Asia,323,0.8286
+Ireland,202,43,44,Europe,289,0.9271
+Indonesia,202,43,43,Asia,288,0.9271
+Peru,188,40,40,South America,268,0.9961
+Turkey,187,40,40,Asia,267,1.0014
+Czechia,180,38,39,Europe,257,1.0404
+Colombia,176,38,37,South America,251,1.064
+Greece,174,37,37,Europe,248,1.0763
+South Korea,170,37,36,Asia,243,1.1016
+Portugal,169,37,36,Europe,242,1.1081
+Belgium,153,33,33,Europe,219,1.224
+Bulgaria,152,33,32,Europe,217,1.232
+Philippines,150,33,32,Asia,215,1.2485
+Denmark,139,30,29,Europe,198,1.3473
+Switzerland,121,26,26,Europe,173,1.5477
+Hungary,118,25,25,Europe,168,1.587
+India,111,24,23,Asia,158,1.6871
+Botswana,101,22,21,Africa,144,1.8541
+Lithuania,98,21,21,Europe,140,1.9109
+Kenya,91,20,19,Africa,130,2.0579
+Croatia,90,20,19,Europe,129,2.0808
+Nigeria,85,19,18,Africa,122,2.2032
+Cambodia,83,18,17,Asia,118,2.2563
+Latvia,82,18,17,Europe,117,2.2838
+Bolivia,81,18,17,South America,116,2.312
+Ukraine,80,17,17,Europe,114,2.3409
+Slovakia,76,16,16,Europe,108,2.4641
+Bangladesh,74,16,16,Asia,106,2.5307
+Ghana,74,16,16,Africa,106,2.5307

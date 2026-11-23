@@ -1,7 +1,7 @@
 {
  "params": {
   "root": "..",
-  "out": ".",
+  "out": "v2",
   "reuse": false,
   "workers": 4,
   "min_side": 100,
@@ -31,7 +31,8 @@
   "near_blank": 0,
   "exact_dup_label_conflict": 0,
   "exact_duplicate": 1,
-  "rare_class": 2006
+  "near_duplicate": 193,
+  "rare_class": 1996
  },
  "near_dup_cross_country_pairs_ignored": 0,
  "near_dup": {
@@ -81,7 +82,7 @@
   {
    "min_images": 50,
    "n_classes": 76,
-   "pct_images_kept": 98.8
+   "pct_images_kept": 98.9
   },
   {
    "min_images": 100,
@@ -101,7 +102,7 @@
   {
    "min_images": 300,
    "n_classes": 28,
-   "pct_images_kept": 85.7
+   "pct_images_kept": 85.6
   },
   {
    "min_images": 500,
@@ -110,20 +111,28 @@
   }
  ],
  "final": {
-  "n_images": 47990,
+  "n_images": 47807,
   "n_classes": 56,
+  "per_continent": {
+   "Europe": 17538,
+   "North America": 14253,
+   "Asia": 8136,
+   "South America": 3946,
+   "Oceania": 2254,
+   "Africa": 1680
+  },
   "split_sizes": {
-   "train": 33589,
-   "test": 7208,
-   "val": 7193
+   "train": 33464,
+   "test": 7172,
+   "val": 7171
   },
   "smallest_test_class": [
    "Bangladesh",
-   15
+   16
   ],
   "largest_class": [
    "United States",
-   12014
+   11973
   ]
  }
 }
