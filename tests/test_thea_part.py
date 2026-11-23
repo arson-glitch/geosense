@@ -16,7 +16,7 @@ CLASSES, WEIGHTS = load_classes()
 C = len(CLASSES)
 
 
-def test_crop_keeps_5_to_82_percent_of_width():
+def test_crop_matches_team_crop_ui():
     out = crop_overlay(Image.new("RGB", (1536, 662)))
     assert out.size == (round(1536 * 0.82) - round(1536 * 0.05), 662)
 
