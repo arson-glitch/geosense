@@ -76,4 +76,9 @@ def find_dataset_root(extra=()):
             return c
         if (c / "compressed_dataset" / "France").is_dir():
             return c / "compressed_dataset"
+    kin = Path("/kaggle/input")
+    if kin.is_dir():  # newer Kaggle layout: /kaggle/input/datasets/<owner>/<slug>/...
+        for hit in sorted(kin.glob("**/France"))[:5]:
+            if hit.is_dir():
+                return hit.parent
     raise FileNotFoundError("Dataset folder not found. Pass its path (the folder that contains France/, Japan/, ...).")
