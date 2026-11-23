@@ -84,3 +84,20 @@ def test_training_and_export_on_tiny_fake_data(mini, tmp_path, monkeypatch):
              "--batch-size", "16", "--workers", "0", "--device", "cpu"])
     out = np.load(tmp_path / "PRED_DIR" / "cnn_scratch_val_logits.npy")
     assert out.dtype == np.float32 and out.shape == ((sub.split == "val").sum(), 56)
+
+
+def test_cache_gives_same_geometry_as_full_pipeline(tmp_path):
+    """Cached small image (UI removed, height 258) -> same tensor shape and nearly the same pixels."""
+    from geosense.cache import _one, cache_height
+    from geosense.transforms import open_image
+    rng = np.random.default_rng(0)
+    arr = (np.linspace(0, 255, 1536)[None, :, None] * np.ones((662, 1, 3)) + rng.normal(0, 5, (662, 1536, 3)))
+    (tmp_path / "src" / "X").mkdir(parents=True)
+    Image.fromarray(arr.clip(0, 255).astype("uint8")).save(tmp_path / "src" / "X" / "a.jpg", quality=95)
+    _one((tmp_path / "src", tmp_path / "cache", "X/a.jpg", cache_height()))
+    small = open_image(tmp_path / "cache" / "X" / "a.jpg")
+    assert small.height == cache_height()
+    full = build_transforms(False)(open_image(tmp_path / "src" / "X" / "a.jpg"))
+    cached = build_transforms(False, crop_ui=False)(small)
+    assert full.shape == cached.shape
+    assert (full - cached).abs().mean() < 0.05
