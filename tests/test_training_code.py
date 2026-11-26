@@ -8,14 +8,28 @@ from torchvision import transforms as T  # noqa: E402
 
 from geosense.models import MODEL_NAMES, build_model, freeze_backbone, unfreeze_last_blocks  # noqa: E402
 from geosense.train import metrics  # noqa: E402
-from geosense.transforms import RESIZE_MODES, CropUI, build_transforms, output_size  # noqa: E402
+from geosense.transforms import RESIZE_MODES, build_transforms, open_image, output_size  # noqa: E402
 
 FAKE = Image.new("RGB", (1536, 662), (120, 160, 90))
 
 
-def test_crop_ui_matches_shared_preprocess():
-    from geosense.preprocess import crop_overlay
-    assert CropUI()(FAKE).size == crop_overlay(FAKE).size == (round(1536 * 0.82) - round(1536 * 0.05), 662)
+def _real_size_jpeg(path):
+    """A 1536x662 JPEG with a horizontal gradient, so a wrong crop shows up as a wrong colour."""
+    arr = np.linspace(0, 255, 1536)[None, :, None] * np.ones((662, 1, 3))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    Image.fromarray(arr.astype("uint8")).save(path, quality=95)
+    return path
+
+
+def test_open_image_crops_same_region_as_team_crop_ui(tmp_path):
+    """Half-resolution decoding must not change WHICH part of the image is kept."""
+    from geosense.data import crop_ui
+    p = _real_size_jpeg(tmp_path / "a.jpg")
+    full = crop_ui(Image.open(p).convert("RGB"))                 # team crop, full resolution
+    half = open_image(p)                                          # our fast loader
+    assert abs(half.width - full.width / 2) <= 1 and abs(half.height - full.height / 2) <= 1
+    ref = np.asarray(full.resize(half.size), dtype=float)
+    assert np.abs(np.asarray(half, dtype=float) - ref).mean() < 3
 
 
 def test_default_resize_is_team_rule():
@@ -70,14 +84,15 @@ def test_training_and_export_on_tiny_fake_data(mini, tmp_path, monkeypatch):
     """End to end on Thea's synthetic mini dataset: train 1 epoch, export val logits in the shared format."""
     import geosense.train as tr
     root, sub = mini
-    man = tmp_path / "manifest.csv"
-    sub.to_csv(man, index=False)
     import shutil
     from geosense.data import DATA_DIR
-    shutil.copy(DATA_DIR / "classes.json", tmp_path / "classes.json")
+    sub.drop(columns="label").to_csv(tmp_path / "splits.csv", index=False)
+    for f in ("classes.json", "class_counts.csv"):
+        shutil.copy(DATA_DIR / f, tmp_path / f)
     orig = tr.FastGeoSenseDataset.__init__
     monkeypatch.setattr(tr.FastGeoSenseDataset, "__init__",
-                        lambda self, r, split, transform=None, manifest=None: orig(self, r, split, transform, man))
+                        lambda self, r, split, transform=None, cached=False:
+                        orig(self, r, split, transform, cached, data_dir=tmp_path))
     for name in ("PRED_DIR", "RESULTS_DIR", "CKPT_DIR"):
         monkeypatch.setattr(tr, name, tmp_path / name)
     tr.main(["--root", str(root), "--model", "cnn_scratch", "--epochs", "1", "--size", "64",
@@ -90,14 +105,11 @@ def test_cache_gives_same_geometry_as_full_pipeline(tmp_path):
     """Cached small image (UI removed, height 258) -> same tensor shape and nearly the same pixels."""
     from geosense.cache import _one, cache_height
     from geosense.transforms import open_image
-    rng = np.random.default_rng(0)
-    arr = (np.linspace(0, 255, 1536)[None, :, None] * np.ones((662, 1, 3)) + rng.normal(0, 5, (662, 1536, 3)))
-    (tmp_path / "src" / "X").mkdir(parents=True)
-    Image.fromarray(arr.clip(0, 255).astype("uint8")).save(tmp_path / "src" / "X" / "a.jpg", quality=95)
+    _real_size_jpeg(tmp_path / "src" / "X" / "a.jpg")
     _one((tmp_path / "src", tmp_path / "cache", "X/a.jpg", cache_height()))
-    small = open_image(tmp_path / "cache" / "X" / "a.jpg")
+    small = open_image(tmp_path / "cache" / "X" / "a.jpg", crop_ui=False)
     assert small.height == cache_height()
     full = build_transforms(False)(open_image(tmp_path / "src" / "X" / "a.jpg"))
-    cached = build_transforms(False, crop_ui=False)(small)
+    cached = build_transforms(False)(small)
     assert full.shape == cached.shape
     assert (full - cached).abs().mean() < 0.05
