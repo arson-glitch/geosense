@@ -1,16 +1,18 @@
 """GeoSense - data cleaning.
 
-Non-destructive: images are never modified or deleted. The output is a
-manifest (one row per kept image, with its split) that every teammate loads,
-so all models train and test on exactly the same data.
+Non-destructive: images are never modified or deleted. The outputs are the
+shared files every teammate loads (team contract, see GEOSENSE_CLAUDE_CONTEXT.md):
+  data/splits.csv       path, country, continent, split
+  data/classes.json     list of kept countries, sorted alphabetically (index = class id)
+  data/continents.json  {country: continent} for every kept country
 
 Stages
   1. Scan + integrity  : decode every image; record size, mode, md5, pHash, basic colour stats
   2. Bad files         : corrupt / too small / near-blank (loading screens)
   3. Exact duplicates  : identical bytes. Same country -> keep one. Different countries -> drop all (label conflict)
-  4. Near duplicates   : pHash Hamming distance <= T -> same dup_group (kept, but never split across train/val/test)
+  4. Near duplicates   : pHash Hamming distance <= T, same country -> keep one image per group, drop the rest
   5. Rare classes      : drop countries with < MIN_IMAGES images after de-duplication
-  6. Split             : stratified *group* split 70/15/15 (groups = dup_group), fixed seed
+  6. Split             : stratified by country, 70/15/15, seed 42 (after de-duplication)
 
 Usage
   python -m geosense.clean --root /path/to/compressed_dataset --out data/
@@ -35,6 +37,29 @@ from PIL import Image
 
 IMG_EXT = {".jpg", ".jpeg", ".png", ".webp"}
 
+# Continent of every country folder in the Kaggle dataset (124). Also acts as an allow-list:
+# folders not listed here (e.g. stray output folders) are ignored with a warning.
+# Conventions to confirm with the team: Russia -> Europe, Turkey -> Asia, Armenia -> Asia,
+# Mexico / Central America / Caribbean -> North America.
+_C = {
+    "Europe": "Aland|Albania|Andorra|Austria|Belarus|Belgium|Bulgaria|Croatia|Czechia|Denmark|Estonia|"
+              "Faroe Islands|Finland|France|Germany|Gibraltar|Greece|Hungary|Iceland|Ireland|Isle of Man|"
+              "Italy|Jersey|Latvia|Lithuania|Luxembourg|Malta|Monaco|Montenegro|Netherlands|North Macedonia|"
+              "Norway|Poland|Portugal|Romania|Russia|San Marino|Serbia|Slovakia|Slovenia|Spain|"
+              "Svalbard and Jan Mayen|Sweden|Switzerland|Ukraine|United Kingdom",
+    "Asia": "Armenia|Bangladesh|Bhutan|Cambodia|China|Hong Kong|India|Indonesia|Iraq|Israel|Japan|Jordan|"
+            "Kyrgyzstan|Laos|Lebanon|Macao|Malaysia|Mongolia|Myanmar|Nepal|Pakistan|Palestine|Philippines|"
+            "Qatar|Singapore|South Korea|Sri Lanka|Taiwan|Thailand|Turkey|United Arab Emirates|Vietnam",
+    "Africa": "Botswana|Egypt|Eswatini|Ghana|Kenya|Lesotho|Madagascar|Mozambique|Nigeria|Reunion|Senegal|"
+              "South Africa|South Sudan|Tanzania|Tunisia|Uganda",
+    "North America": "Bermuda|Canada|Costa Rica|Curacao|Dominican Republic|Greenland|Guatemala|Martinique|"
+                     "Mexico|Puerto Rico|US Virgin Islands|United States",
+    "South America": "Argentina|Bolivia|Brazil|Chile|Colombia|Ecuador|Paraguay|Peru|Uruguay|Venezuela",
+    "Oceania": "American Samoa|Australia|Guam|New Zealand|Northern Mariana Islands|Pitcairn Islands",
+    "Antarctica": "Antarctica|South Georgia and South Sandwich Islands",
+}
+CONTINENTS = {country: cont for cont, names in _C.items() for country in names.split("|")}
+
 
 # ---------------------------------------------------------------- stage 1
 def scan(root: str) -> pd.DataFrame:
@@ -42,6 +67,9 @@ def scan(root: str) -> pd.DataFrame:
     for country in sorted(os.listdir(root)):
         cdir = os.path.join(root, country)
         if country.startswith((".", "_")) or not os.path.isdir(cdir):
+            continue
+        if country not in CONTINENTS:
+            print(f"  WARNING: ignoring folder '{country}' (not a known country - move it out of the dataset folder)")
             continue
         for f in sorted(os.listdir(cdir)):
             if os.path.splitext(f)[1].lower() in IMG_EXT:
@@ -243,6 +271,10 @@ def main():
                          "country_b": pc[x[:, 1]], "distance": x[:, 2]}) for x in (pairs, examples)]
     pd.concat(rev).sort_values("distance").to_csv(os.path.join(a.out, "near_dup_pairs.csv"), index=False)
     df = df.merge(kept[["path", "dup_group"]], on="path", how="left")
+    # de-duplicate: keep the first image (by path) of each group, drop the others
+    in_group = df.dup_group.notna() & (df.status == "keep")
+    extra = in_group & df[in_group].sort_values("path").duplicated("dup_group").reindex(df.index, fill_value=False)
+    drop(extra, "near_duplicate")
 
     # 5. rare classes
     print(f"[5] classes with < {a.min_images} images")
@@ -259,18 +291,15 @@ def main():
     drop(df.country.isin(rare), "rare_class")
 
     # 6. split
-    print("[6] stratified group split 70/15/15")
-    from sklearn.model_selection import StratifiedGroupKFold
-    m = df[df.status == "keep"].copy()
-    m["dup_group"] = m["dup_group"].astype(int)
+    print("[6] stratified split 70/15/15")
+    from sklearn.model_selection import train_test_split
+    m = df[df.status == "keep"].copy().sort_values("path").reset_index(drop=True)
     classes = sorted(m.country.unique())
-    m["label"] = m.country.map({c: i for i, c in enumerate(classes)})
-    sgkf = StratifiedGroupKFold(n_splits=20, shuffle=True, random_state=a.seed)
-    fold = np.empty(len(m), dtype=int)
-    for f, (_, idx) in enumerate(sgkf.split(m, m.label, m.dup_group)):
-        fold[idx] = f
-    m["split"] = np.select([fold < 3, fold < 6], ["test", "val"], "train")   # 3/20=15%, 3/20=15%
-    assert m.groupby("dup_group").split.nunique().max() == 1, "a duplicate group spans splits!"
+    m["continent"] = m.country.map(CONTINENTS)
+    train_idx, rest_idx = train_test_split(m.index, test_size=0.30, stratify=m.country, random_state=a.seed)
+    val_idx, test_idx = train_test_split(rest_idx, test_size=0.50, stratify=m.loc[rest_idx, "country"],
+                                         random_state=a.seed)
+    m.loc[train_idx, "split"], m.loc[val_idx, "split"], m.loc[test_idx, "split"] = "train", "val", "test"
 
     per_class = m.pivot_table(index="country", columns="split", values="path", aggfunc="count", fill_value=0)
     per_class = per_class[["train", "val", "test"]]
@@ -279,22 +308,25 @@ def main():
     weights = (w / w.mean()).round(4)
     report["final"] = {
         "n_images": len(m), "n_classes": len(classes),
+        "per_continent": m.continent.value_counts().to_dict(),
         "split_sizes": m.split.value_counts().to_dict(),
         "smallest_test_class": [str(per_class["test"].idxmin()), int(per_class["test"].min())],
         "largest_class": [str(counts.idxmax()), int(counts.max())],
     }
     print(f"    {report['final']}")
 
-    # outputs
-    m[["path", "country", "label", "dup_group", "split"]].sort_values("path") \
-        .to_csv(os.path.join(a.out, "manifest.csv"), index=False)
+    # outputs (team contract)
+    m[["path", "country", "continent", "split"]].to_csv(os.path.join(a.out, "splits.csv"), index=False)
+    with open(os.path.join(a.out, "classes.json"), "w") as fh:
+        json.dump(classes, fh, indent=1)
+    with open(os.path.join(a.out, "continents.json"), "w") as fh:
+        json.dump({c: CONTINENTS[c] for c in classes}, fh, indent=1)
+    # extra files for the report / EDA
+    per_class.assign(continent=per_class.index.map(CONTINENTS), total=per_class.sum(axis=1), class_weight=weights) \
+        .sort_values("total", ascending=False).to_csv(os.path.join(a.out, "class_counts.csv"))
     df.drop(columns=["ok"]).to_csv(os.path.join(a.out, "inventory.csv"), index=False)
     df[["path", "country", "bytes", "width", "height", "mean_r", "mean_g", "mean_b", "brightness",
-        "brightness_std"]].to_csv(os.path.join(a.out, "image_stats.csv"), index=False)   # used by the EDA
-    per_class.assign(total=per_class.sum(axis=1), class_weight=weights).sort_values("total", ascending=False) \
-        .to_csv(os.path.join(a.out, "class_counts.csv"))
-    with open(os.path.join(a.out, "classes.json"), "w") as fh:
-        json.dump({"classes": classes, "class_weights": weights.reindex(classes).tolist()}, fh, indent=1)
+        "brightness_std"]].to_csv(os.path.join(a.out, "image_stats.csv"), index=False)
     with open(os.path.join(a.out, "cleaning_report.json"), "w") as fh:
         json.dump(report, fh, indent=1, default=str)
     print(f"done -> {a.out}")

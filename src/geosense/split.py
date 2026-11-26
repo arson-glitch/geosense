@@ -1,6 +1,7 @@
-"""Build train/ val/ test/ folders (one sub-folder per country) from the manifest.
+"""Build train/ val/ test/ folders (one sub-folder per country) from data/splits.csv.
 
-Only needed if you prefer torchvision.datasets.ImageFolder over GeoSenseDataset.
+Optional - only for people who prefer torchvision.datasets.ImageFolder over GeoSenseDataset.
+Note: ImageFolder does NOT apply the UI crop; add geosense.crop_ui to your transform.
 Uses hard links by default: no extra disk space, files behave like normal copies.
 
     python -m geosense.split --root ~/Downloads/compressed_dataset --out ~/Downloads/geosense_split
@@ -12,16 +13,15 @@ import os
 import shutil
 from pathlib import Path
 
-from .data import DATA_DIR, SPLITS, load_manifest
+from .data import DATA_DIR, SPLITS, load_splits
 
 
-def build_split_folders(root: str | Path, out: str | Path, manifest=DATA_DIR / "manifest.csv",
-                        copy: bool = False) -> dict[str, int]:
+def build_split_folders(root, out, splits_csv=DATA_DIR / "splits.csv", copy: bool = False) -> dict[str, int]:
     root, out = Path(root).expanduser(), Path(out).expanduser()
     if out.resolve().is_relative_to(root.resolve()):
         raise ValueError("Put the output folder OUTSIDE the dataset folder, "
                          "otherwise it would be read as an extra country.")
-    df = load_manifest(manifest)
+    df = load_splits(splits_csv)
     made = 0
     for path, country, split in df[["path", "country", "split"]].itertuples(index=False):
         dst = out / split / country / Path(path).name
@@ -34,13 +34,12 @@ def build_split_folders(root: str | Path, out: str | Path, manifest=DATA_DIR / "
         else:
             try:
                 os.link(src, dst)
-            except OSError:  # different disk / filesystem without hard links
+            except OSError:
                 shutil.copy2(src, dst)
         made += 1
     counts = {s: sum(1 for _ in (out / s).rglob("*.jpg")) for s in SPLITS}
     for s in SPLITS:
-        expected = int((df.split == s).sum())
-        assert counts[s] == expected, f"{s}: {counts[s]} files, expected {expected}"
+        assert counts[s] == int((df.split == s).sum()), f"{s}: wrong number of files (stale folder?)"
     print(f"created {made} files -> {out}  {counts}")
     return counts
 

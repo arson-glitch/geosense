@@ -1,7 +1,7 @@
 """Shared image pre-processing (team rules from GEOSENSE_CLAUDE_CONTEXT.md, section 4).
 
-1. Crop the GeoGuessr interface: keep x from 5% to 82% of the width, full height.
-   (score box + minimap sit at x > 82%, compass and buttons at x < 5%).
+1. Crop the GeoGuessr interface with the team function ``geosense.data.crop_ui``
+   (compass and buttons on the left, score box + minimap on the right).
 2. Never squash by default. Resize the short side, then centre-crop to a square.
    ``mode="squash"`` is available only to compare the two options on the *validation* set.
 3. No horizontal flip anywhere (driving side is a clue).
@@ -14,15 +14,15 @@ import numpy as np
 from PIL import Image
 from torch.utils.data import Dataset
 
-LEFT, RIGHT = 0.05, 0.82
+from .data import crop_ui
+
 CLIP_MEAN = (0.48145466, 0.4578275, 0.40821073)
 CLIP_STD = (0.26862954, 0.26130258, 0.27577711)
 
 
-def crop_overlay(img: Image.Image, left: float = LEFT, right: float = RIGHT) -> Image.Image:
-    """Remove the GeoGuessr interface (left 5% and right 18% of the width)."""
-    w, h = img.size
-    return img.crop((round(w * left), 0, round(w * right), h))
+def crop_overlay(img: Image.Image) -> Image.Image:
+    """Remove the GeoGuessr interface (the team crop, ``geosense.data.crop_ui``)."""
+    return crop_ui(img)
 
 
 def to_square(img: Image.Image, size: int, mode: str = "centre") -> Image.Image:
