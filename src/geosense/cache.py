@@ -1,8 +1,8 @@
 """Pre-resized image cache: makes every training epoch ~5x faster on Colab.
 
 Decoding a 1536x662 JPEG is the slowest step of training (the GPU waits for the CPU).
-We do it ONCE: for every image in the manifest, remove the GeoGuessr interface (same
-crop_overlay as everyone else), resize so the height is `height` px (aspect ratio kept),
+We do it ONCE: for every image in splits.csv, remove the GeoGuessr interface (the team
+crop_ui, via open_image), resize so the height is `height` px (aspect ratio kept),
 and save a small JPEG with the same relative path. Training then reads the small files
 and skips the UI crop. Geometry is identical to the uncached pipeline.
 
@@ -16,7 +16,6 @@ from multiprocessing import Pool
 from pathlib import Path
 
 from .data import load_manifest
-from .preprocess import crop_overlay
 from .transforms import open_image
 
 
@@ -30,7 +29,7 @@ def _one(args):
     dst = Path(out) / rel
     if dst.exists():
         return 0
-    img = crop_overlay(open_image(Path(root) / rel))
+    img = open_image(Path(root) / rel)                               # decoded + UI removed
     w, h = img.size
     img = img.resize((round(w * height / h), height), resample=3)   # 3 = bicubic
     dst.parent.mkdir(parents=True, exist_ok=True)
