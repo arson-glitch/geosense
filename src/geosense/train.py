@@ -226,7 +226,8 @@ def main(argv=None):
     classes, _ = load_classes()
     C = len(classes)
     transfer = args.model != "cnn_scratch"
-    ckpt_dir = CKPT_DIR / args.model
+    # a --subset debug run gets its own folder, so it never overwrites the real checkpoints
+    ckpt_dir = CKPT_DIR / (args.model + (f"_subset{args.subset}" if args.subset else ""))
     ckpt_dir.mkdir(parents=True, exist_ok=True)
     print(f"model={args.model}  device={device}  classes={C}  resize={args.resize}  size={args.size}")
 
