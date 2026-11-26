@@ -1,8 +1,9 @@
 """Image pre-processing for our own models (CNN from scratch, ResNet / EfficientNet).
 
 Pipeline for one image (1536x662 GeoGuessr screenshot):
-  1. CropUI      : keep x from 5% to 82% of the width (removes compass/buttons on the
-                   left, score box and mini-map on the right). Full height is kept.
+  1. open_image  : decode at half resolution and remove the GeoGuessr interface with the team
+                   crop (geosense.data.crop_ui, margins scaled to the decoded size). Like
+                   Seif's GeoSenseDataset, the crop happens when the image is loaded, not here.
   2. Resize      : RESIZE MODE, one switch. Default "crop" = the team rule (same as geosense.preprocess):
                      "crop"   -> short side = size, then crop a square (no distortion, loses the sides)
                      "squash" -> stretch to size x size   (keeps the whole scene, distorts shapes)
@@ -14,13 +15,14 @@ Pipeline for one image (1536x662 GeoGuessr screenshot):
                    harmless for the CNN from scratch, and keeps all our models identical).
 
 StreetCLIP does NOT use this file: Thea's geosense.preprocess handles it at 336 px.
-The UI crop itself is shared with her code (crop_overlay), so all models see the same pixels.
+The UI crop is the shared team function, so all models see the same part of the image.
+Usage (training, export, the app):  build_transforms(False)(open_image(path))
 """
 from __future__ import annotations
 
 from torchvision import transforms as T
 
-from .preprocess import LEFT as UI_LEFT, RIGHT as UI_RIGHT, crop_overlay
+from .data import UI_LEFT_PX, UI_RIGHT_PX
 
 IMAGENET_MEAN = (0.485, 0.456, 0.406)
 IMAGENET_STD = (0.229, 0.224, 0.225)
@@ -29,33 +31,26 @@ RESIZE_MODES = ("crop", "squash", "wide")
 DEFAULT_RESIZE = "crop"                  # team rule: resize short side, then crop (no squash)
 
 
-class CropUI:
-    """Cut the GeoGuessr interface off the left and right edges (works on PIL images)."""
-
-    def __init__(self, left: float = UI_LEFT, right: float = UI_RIGHT):
-        assert 0 <= left < right <= 1
-        self.left, self.right = left, right
-
-    def __call__(self, img):
-        return crop_overlay(img, self.left, self.right)
-
-    def __repr__(self):
-        return f"CropUI(left={self.left}, right={self.right})"
-
-
-def open_image(path):
-    """Open a screenshot as RGB, decoded at half resolution (768x331).
+def open_image(path, crop_ui: bool = True):
+    """Open a screenshot as RGB, decoded at half resolution, with the GeoGuessr interface removed.
 
     JPEG can decode at 1/2 scale almost for free, and 331 px of height is still more than
     the 224-258 px we resize to, so nothing is lost - but loading is ~3x faster, which
     matters on Colab where the CPU (not the GPU) is the bottleneck.
-    Use this everywhere our models see an image (training, export, the app).
+    The team crop (geosense.data.crop_ui) is defined in pixels of the original image,
+    so the margins are scaled by the decoding factor: same region as crop_ui, at any size.
+    crop_ui=False for files from geosense.cache (already cropped and resized).
     """
     from PIL import Image
     img = Image.open(path)
+    orig_w = img.width
     if img.height >= 600:                        # original screenshots only, never cached small files
         img.draft("RGB", (img.width // 2, img.height // 2))
-    return img.convert("RGB")
+    img = img.convert("RGB")
+    if crop_ui:
+        s = img.width / orig_w
+        img = img.crop((round(UI_LEFT_PX * s), 0, img.width - round(UI_RIGHT_PX * s), img.height))
+    return img
 
 
 def output_size(size: int = 224, resize: str = DEFAULT_RESIZE) -> tuple[int, int]:
@@ -66,16 +61,16 @@ def output_size(size: int = 224, resize: str = DEFAULT_RESIZE) -> tuple[int, int
 
 
 def build_transforms(train: bool, size: int = 224, resize: str = DEFAULT_RESIZE,
-                     zoom: float = 1.15, jitter: float = 0.2, crop_ui: bool = True):
+                     zoom: float = 1.15, jitter: float = 0.2):
     """Return the torchvision pipeline.
 
     train : True -> with augmentation (train split only); False -> deterministic (val / test / app).
     zoom  : for training we resize to `zoom * size` and take a random crop of `size`,
             i.e. a small random shift/zoom. For evaluation we resize straight to `size`.
-    crop_ui : False when the images come from geosense.cache (interface already removed).
+    Input: a PIL image with the interface already removed (open_image or GeoSenseDataset).
     """
     h, w = output_size(size, resize)
-    steps = [CropUI()] if crop_ui else []
+    steps = []
 
     if train:
         big = (round(h * zoom), round(w * zoom))
