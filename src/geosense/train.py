@@ -17,14 +17,14 @@ Examples
   python -m geosense.train --root /path/compressed_dataset --model resnet50 --export-only --export val,test
 
 What it does
-  1. Data      : GeoSenseDataset (manifest.csv split, seed 42 - never re-split), transforms.py.
+  1. Data      : GeoSenseDataset (splits.csv, seed 42 - never re-split), transforms.py.
   2. Imbalance : class-weighted cross-entropy (default: square-root weights) or a weighted sampler.
   3. Training  : Adam, LR halved when val macro-F1 stops improving, early stopping on val macro-F1.
                  Transfer models: stage 1 head only, stage 2 last block(s) unfrozen with a 10x smaller LR.
   4. Saving    : checkpoints/<model>/last.pt every epoch (resume), best.pt = best val macro-F1,
                  results/<model>_history.csv (curves for the report).
   5. Export    : predictions/<model>_<split>_logits.npy, float32, shape (N, C),
-                 rows in manifest order for that split, columns in classes.json order, raw logits.
+                 rows in splits.csv order for that split, columns in classes.json order, raw logits.
                  Only val by default. Test only when asked explicitly (--export test).
 """
 from __future__ import annotations
@@ -52,14 +52,18 @@ CKPT_DIR = PROJECT_ROOT / "checkpoints"          # *.pt is git-ignored: never co
 
 
 class FastGeoSenseDataset(GeoSenseDataset):
-    """Seif's GeoSenseDataset (same manifest, same order) with faster half-resolution decoding."""
+    """Seif's GeoSenseDataset (same splits.csv rows, same order, same UI crop) with faster
+    half-resolution decoding. cached=True: files come from geosense.cache (already cropped)."""
+
+    def __init__(self, root, split, transform=None, cached: bool = False, **kw):
+        super().__init__(root, split, transform=transform, **kw)
+        self.cached = cached
 
     def __getitem__(self, i: int):
-        row = self.df.iloc[i]
-        img = open_image(self.root / row["path"])
+        img = open_image(self.root / self.df["path"].iloc[i], crop_ui=not self.cached)
         if self.transform is not None:
             img = self.transform(img)
-        return img, int(row["label"])
+        return img, int(self.labels[i])
 
 
 # ------------------------------------------------------------------ setup helpers
@@ -101,7 +105,7 @@ def make_sampler(labels: np.ndarray, num_classes: int) -> WeightedRandomSampler:
 
 def small_subset(ds, n: int, seed: int) -> Subset:
     """n images, stratified by country, for quick debugging runs."""
-    df = ds.df
+    df = ds.df.assign(label=ds.labels)
     frac = min(1.0, n / len(df))
     idx = df.groupby("label").sample(frac=frac, random_state=seed).index
     return Subset(ds, sorted(idx.tolist()))
@@ -109,8 +113,8 @@ def small_subset(ds, n: int, seed: int) -> Subset:
 
 def subset_labels(ds) -> np.ndarray:
     if isinstance(ds, Subset):
-        return ds.dataset.df["label"].to_numpy()[ds.indices]
-    return ds.df["label"].to_numpy()
+        return ds.dataset.labels[ds.indices]
+    return ds.labels
 
 
 # ------------------------------------------------------------------ one epoch / evaluation
@@ -163,13 +167,13 @@ def metrics(logits: np.ndarray, y: np.ndarray, criterion=None) -> dict:
 
 # ------------------------------------------------------------------ export (the shared contract)
 def export_logits(model, root, split, args, device, classes) -> Path:
-    ds = FastGeoSenseDataset(root, split, transform=build_transforms(False, args.size, args.resize,
-                                                                    crop_ui=not args.cache))
+    ds = FastGeoSenseDataset(root, split, transform=build_transforms(False, args.size, args.resize),
+                             cached=bool(args.cache))
     loader = DataLoader(ds, batch_size=args.batch_size, shuffle=False,
                         num_workers=args.workers, pin_memory=device.type == "cuda")
     logits, y = predict_logits(model, loader, device)
     assert logits.shape == (len(ds.df), len(classes)), logits.shape
-    assert (y == ds.df["label"].to_numpy()).all(), "row order differs from manifest"
+    assert (y == ds.labels).all(), "row order differs from splits.csv"
     if args.model in SHARED_NAMES:                     # Thea's checker: shape, dtype, no NaN
         path = save_logits(args.model, split, logits, PRED_DIR, manifest=ds.df, n_classes=len(classes))
     else:                                               # efficientnet_b0 is not in the shared list
@@ -234,9 +238,10 @@ def main(argv=None):
 
     if not args.export_only:
         # ---- data
-        tf = dict(size=args.size, resize=args.resize, crop_ui=not args.cache)
-        train_ds = FastGeoSenseDataset(args.root, "train", transform=build_transforms(True, **tf))
-        val_ds = FastGeoSenseDataset(args.root, "val", transform=build_transforms(False, **tf))
+        tf = dict(size=args.size, resize=args.resize)
+        c = bool(args.cache)
+        train_ds = FastGeoSenseDataset(args.root, "train", transform=build_transforms(True, **tf), cached=c)
+        val_ds = FastGeoSenseDataset(args.root, "val", transform=build_transforms(False, **tf), cached=c)
         if args.subset:
             train_ds = small_subset(train_ds, args.subset, args.seed)
             val_ds = small_subset(val_ds, max(200, args.subset // 4), args.seed)
