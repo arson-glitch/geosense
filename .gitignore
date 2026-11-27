@@ -15,6 +15,9 @@ data/near_dup_pairs.csv
 *.pt
 *.pth
 *.ckpt
+checkpoints/
+predictions/runs/
+logs/
 
 # python / tools
 __pycache__/
@@ -29,3 +32,5 @@ __pycache__/
 features/
 predictions/*embeddings*.npy
 predictions_dryrun/
+scripts/slurm/cluster.env
+inspect.txt

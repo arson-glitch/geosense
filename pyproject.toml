@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "numpy", "pandas", "pillow", "matplotlib", "seaborn", "scikit-learn",
-    "imagehash", "torch", "torchvision", "transformers>=4.40", "tqdm",
+    "imagehash", "torch", "torchvision", "transformers>=4.40", "peft", "tqdm",
 ]
 
 [project.optional-dependencies]
