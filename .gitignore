@@ -29,3 +29,6 @@ __pycache__/
 features/
 predictions/*embeddings*.npy
 predictions_dryrun/
+
+# Mohamed: training checkpoints (weights are never committed)
+checkpoints/
