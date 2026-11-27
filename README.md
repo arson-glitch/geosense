@@ -140,6 +140,32 @@ Models 1, 2, 5 and 6 of the results table. Code in `src/geosense/` (`preprocess.
 Shared pre-processing (`geosense.preprocess`): keep x from 5% to 82% of the width (removes score box, minimap, compass), resize the short side then centre-crop (no squash unless compared on `val`), 336 px for StreetCLIP, no horizontal flip.
 Check your own exports with `from geosense.predictions import check_val; check_val()` (validation metrics only).
 
+## StreetCLIP fine-tuning (Faris + Louis)
+
+Model 7 of the results table. Code in `src/geosense/finetune.py` (training, checkpoints, export) and
+`src/geosense/compare.py` (comparison with zero-shot and the probe). Training runs on the IE SLURM cluster:
+follow `docs/cluster.md` step by step (scripts in `scripts/slurm/`).
+
+| Notebook | Who | What |
+|---|---|---|
+| `05_streetclip_finetune_setup.ipynb` | Louis | environment, data and pre-processing checks, laptop smoke run |
+| `06_streetclip_finetune_experiments.ipynb` | Faris | experiment plan, commands, training curves, choice of the best run on `val` |
+| `07_streetclip_comparison.ipynb` | Louis | zero-shot vs probe vs fine-tuned on `val`, verdict; `test` once at the end |
+
+```bash
+# laptop smoke run (a few minutes, no export)
+python -m geosense.finetune --root ~/Downloads/compressed_dataset --subset 200 --epochs 1 --workers 0
+```
+
+- The model starts as the zero-shot model (head = text embeddings, same 336 px centre view and prompt as Thea),
+  so epoch 0 of every history is the zero-shot reference. Methods: `head`, `last_blocks` (default, last 2 vision
+  blocks), `lora`.
+- Checkpoints every epoch in `checkpoints/<run>/` (never committed); the same command with `--resume` continues.
+- Experiments export to `predictions/runs/<run>_val_logits.npy`. Only `--final` writes the team files
+  `predictions/streetclip_finetuned_<split>_logits.npy`.
+- Decision rule, fixed in advance: fine-tuned replaces the linear probe only if it beats it on `val` macro-F1 by
+  more than the bootstrap noise. Reference on `val`: zero-shot 0.695, probe 0.776 (macro-F1).
+
 ## Data licence
 
 ## Licence

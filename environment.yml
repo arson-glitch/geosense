@@ -20,4 +20,5 @@ dependencies:
   - pip:
       - imagehash
       - transformers>=4.40
+      - peft
       - tqdm
