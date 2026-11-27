@@ -1,0 +1,16 @@
+{
+ "temperatures": {
+  "majority": 1.0007347922031984,
+  "histogram_lr": 1.4600427283921027,
+  "histogram_rf": 0.5501739468640373,
+  "cnn_scratch": 0.8479611570053894,
+  "resnet50": 1.2279919864315423,
+  "streetclip_zeroshot": 0.9595440776019238,
+  "streetclip_probe": 1.1238726620126704
+ },
+ "mix": {
+  "clip": "streetclip_probe",
+  "own": "resnet50",
+  "w": 1.0
+ }
+}
